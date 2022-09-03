@@ -23,7 +23,9 @@ class ChessGameControl
   def game_turn
     puts "It's team #{@next_turn.zero? ? 'White (W)' : 'Black (B)'} turn"
     player = @next_turn.zero? ? @player_w : @player_b
+    player.clear_two_steps_pawn
     choose_input(player)
+    kings_set_checked
     @chess_board.display_board
     @next_turn = @next_turn.zero? ? 1 : 0
     check_winner
@@ -49,24 +51,28 @@ class ChessGameControl
   ### DEFAULT
   # Use custom methods: from_loc, to_loc, kings_set_checked
   def default_input(player)
-    input_from = from_loc(player)
-    @chess_board.display_board_possible_moves(input_from)
-    input_to = to_loc(player, input_from)
-    chess_piece = @chess_board.get_node(input_from).chess_piece
-    chess_piece.move(input_to, @chess_board)
-    kings_set_checked
+    inputs = input_loc(player)
+    chess_piece = @chess_board.get_node(inputs[0]).chess_piece
+    return default_input(player) unless chess_piece.move(inputs[1], @chess_board)
+
+    promote_to_queen(chess_piece) if check_pawn_promote?(chess_piece)
   end
 
   def kings_set_checked
-    @player_b.king.set_checked(@chess_board)
-    @player_w.king.set_checked(@chess_board)
+    kings_set_checked_util(@player_b.chess_pieces['King0'])
+    kings_set_checked_util(@player_w.chess_pieces['King0'])
+  end
+
+  def kings_set_checked_util(king)
+    king.modify_checked(@chess_board)
+    king.print_checked_info
   end
 
   ### CASTLING
   # Use custom methods: input_castling, castling_possible?, do_castling, choose_input
   def castling(player)
     rook = @chess_board.get_node(input_castling(player)).chess_piece
-    king = player.king
+    king = player.chess_pieces['King0']
     if castling_possible?(king, rook)
       puts 'Initiate castling'
       do_castling(king, rook)
@@ -116,13 +122,28 @@ class ChessGameControl
 
   # check, mate, stalemate (black - 1, white - 0)
   def check_winner
-    @winner = 0 if @player_w.king.mate?(@chess_board) || (@next_turn.zero? && @player_b.king.checked)
-    @winner = 1 if @player_b.king.mate?(@chess_board) || (@next_turn == 1 && @player_w.king.checked)
-    @winner = -1 if @player_b.king.stalemate?(@chess_board) || @player_w.king.stalemate?(@chess_board)
+    king_w = @player_w.chess_pieces['King0']
+    king_b = @player_b.chess_pieces['King0']
+    @winner = 0 if @player_w.mate?(@chess_board) || (@next_turn.zero? && king_b.checked)
+    @winner = 1 if @player_b.mate?(@chess_board) || (@next_turn == 1 && king_w.checked)
+    @winner = -1 if @player_b.stalemate?(@chess_board) || @player_w.stalemate?(@chess_board)
   end
 
   # INPUT
   # Use custom methods: valid_from_loc?
+  def input_loc(player)
+    loop do
+      input_from = from_loc(player)
+      @chess_board.display_board_possible_moves(input_from)
+      input_to = to_loc(player, input_from)
+      if input_to == 'reset'
+        puts 'Resetting the input...'
+        next
+      end
+      return [input_from, input_to]
+    end
+  end
+
   def from_loc(player)
     loop do
       input_loc = player.input_loc_from
@@ -141,7 +162,7 @@ class ChessGameControl
   def to_loc(player, from_loc)
     loop do
       input_loc = player.input_loc_to
-      return input_loc if valid_to_loc?(from_loc, input_loc)
+      return input_loc if input_loc == 'reset' || valid_to_loc?(from_loc, input_loc)
 
       puts "Invalid move.
       The pieces #{@chess_board.get_node(from_loc).chess_piece.display_symbol} can't move to
@@ -151,5 +172,22 @@ class ChessGameControl
 
   def valid_to_loc?(from_loc, to_loc)
     @chess_board.get_node(from_loc).chess_piece.verify_next_move(to_loc, @chess_board)
+  end
+
+  def promote_to_queen(pawn)
+    player = pawn.player
+    new_queen = player.replace_pawn_with_queen(pawn)
+    loc = new_queen.location
+    @chess_board.chess_board[loc[0]][loc[1]].chess_piece = new_queen
+  end
+
+  def check_pawn_promote?(chess_piece)
+    if chess_piece.name == 'Pawn'
+      check_pawn_w = chess_piece.player.team.zero? && chess_piece.location[0].zero?
+      check_pawn_b = chess_piece.player.team == 1 && chess_piece.location[0] == 7
+      check_pawn_b || check_pawn_w
+    else
+      false
+    end
   end
 end

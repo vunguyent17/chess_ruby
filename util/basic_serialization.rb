@@ -13,11 +13,11 @@ module BasicSerializable
     obj = {}
     instance_variables.map do |var|
       skip = false
-      skip = yield(obj, var, skip) if block_given?
+      skip = yield(obj, var) if block_given?
       next if skip == true
 
       var_value = instance_variable_get(var)
-      obj[var] = if %w[Integer String NilClass Array FalseClass TrueClass].include?(var_value.class.to_s)
+      obj[var] = if %w[Integer String NilClass Array Hash FalseClass TrueClass].include?(var_value.class.to_s)
                    var_value
                  else
                    var_value.serialize_util
@@ -32,11 +32,11 @@ module BasicSerializable
 
   def unserialize(obj)
     obj.each_key do |key|
-      if block_given?
-        yield(obj, key)
-      else
-        instance_variable_set(key, obj[key])
-      end
+      skip = false
+      skip = yield(obj, key) if block_given?
+      next if skip == true
+
+      instance_variable_set(key, obj[key])
     end
   end
 end

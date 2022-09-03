@@ -33,29 +33,35 @@ class King < ChessPiece
   end
 
   def checked_at?(loc, chess_board)
-    chess_pieces_list = %w[Bishop King Knight Pawn Queen Rook]
+    chess_pieces_list = %w[Bishop King Knight Queen Rook]
     chess_pieces_list.each do |name|
       class_name = Module.const_get name
-      test_instance = class_name.new(@player, loc)
+      test_instance = class_name.new("#{name}Test", @player)
+      test_instance.location = loc
       possible_moves = test_instance.possible_moves(chess_board)
       possible_moves.each { |move| return true if chess_board.get_node(move).chess_piece.class.to_s == name }
     end
+    return true if checked_by_pawn_at?(loc, chess_board)
+
     false
   end
 
-  def set_checked(chess_board)
-    @checked =  checked_at?(@location, chess_board)
+  def checked_by_pawn_at?(target_loc, chess_board)
+    adjust_check = [1, -1].product([1, 0, -1]) + [[2, 0], [-2, 0]]
+    loc_check_temp = adjust_check.map { |adjust| [adjust, target_loc].transpose.map(&:sum) }
+    loc_check = loc_check_temp.filter { |loc| (0..7).include?(loc[0]) && (0..7).include?(loc[1]) }
+    pieces_check = loc_check.each_with_object([]) do |loc, memo|
+      piece = chess_board.get_node(loc).chess_piece
+      memo << piece unless piece.nil?
+    end
+    pieces_check.any? { |piece| piece.possible_moves(chess_board).include?(target_loc) }
   end
 
-  def mate?(chess_board)
-    @checked == true && possible_moves(chess_board) != [] && possible_moves(chess_board).all? do |move|
-      checked_at?(move, chess_board) == true
-    end
+  def modify_checked(chess_board)
+    @checked = checked_at?(@location, chess_board)
   end
 
-  def stalemate?(chess_board)
-    @checked == false && possible_moves(chess_board) != [] && possible_moves(chess_board).all? do |move|
-      checked_at?(move, chess_board) == true
-    end
+  def print_checked_info
+    puts "Warning: #{display_symbol} is checked" if @checked == true
   end
 end

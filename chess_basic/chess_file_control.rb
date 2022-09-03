@@ -36,25 +36,28 @@ class ChessFileControl < ChessGameControl
     unserialize(obj)
     load_file.close
     puts 'Data loaded successfully'.green
+    @chess_board.display_board
   end
 
   def unserialize_util(obj, key)
     case key
     when '@player_b', '@player_w'
-      info = obj[key]
-      Player.new(info['@name'], info['@team'])
-    when '@chess_board'
-      ChessBoard.new(@player_b, @player_w, obj[key])
+      Player.new(obj[key])
     else
       obj[key]
     end
   end
 
+  def serialize_util
+    super do |_obj, var|
+      var == :@chess_board
+    end
+  end
+
   def unserialize(obj)
     obj.each_key do |key|
-      next if key == '@id'
-
       instance_variable_set(key, unserialize_util(obj, key))
     end
+    @chess_board.unserialize(@player_b, @player_w)
   end
 end

@@ -4,13 +4,14 @@ require_relative '../../util/basic_serialization'
 # ChessPiece class for Chess
 class ChessPiece
   include BasicSerializable
-  attr_accessor :name, :player, :moved, :location
+  attr_accessor :piece_id, :name, :player, :moved, :location
 
-  def initialize(player, location)
+  def initialize(piece_id, player)
+    @piece_id = piece_id
     @name = self.class.to_s
     @player = player
     @moved = false
-    @location = location
+    @location = [0, 0]
   end
 
   def serialize_util
@@ -21,6 +22,12 @@ class ChessPiece
       else
         false
       end
+    end
+  end
+
+  def unserialize(obj)
+    super do |_obj, key|
+      key == '@player'
     end
   end
 
@@ -37,25 +44,50 @@ class ChessPiece
     game_board.set_chess_piece(@location, nil)
     @location = new_loc
     game_board.set_chess_piece(@location, self)
+    @player.chess_pieces['King0'].modify_checked(game_board)
   end
 
-  def move_when_checked(new_loc, game_board)
-    old_location = @location
+  def move_when_checked_possible?(new_loc, game_board)
+    # save original state
+    old_loc = @location
+    old_move = @move
+    old_king_checked = @player.chess_pieces['King0'].checked
+    new_chess_piece = game_board.get_node(new_loc).chess_piece
+    # test
+    result = true
     initiate_move(new_loc, game_board)
-    if @player.king.checked
-      initiate_move(old_location, game_board)
-      return false
-    end
-    true
+    result = false if @player.chess_pieces['King0'].checked
+    # load original state
+    initiate_move(old_loc, game_board)
+    game_board.set_chess_piece(new_loc, new_chess_piece)
+    @move = old_move
+    @player.chess_pieces['King0'].checked = old_king_checked
+    result
+  end
+
+  def move_util(new_loc, game_board)
+    return false if @player.chess_pieces['King0'].checked && !move_when_checked_possible?(new_loc, game_board)
+
+    remove_opponent_piece(new_loc, game_board)
+    initiate_move(new_loc, game_board)
+    @moved = true
   end
 
   def move(new_loc, game_board)
-    if @player.king.checked
-      return false if move_when_checked(new_loc, game_board) == false
-    else
-      initiate_move(new_loc, game_board)
-    end
-    @moved = true
+    info = 'Move to new location not possible because the King would still be checked. Please choose another location'
+    result = move_util(new_loc, game_board)
+    puts info if result == false
+    result
+  end
+
+  def remove_opponent_piece(new_loc, game_board)
+    node_remove_piece = game_board.chess_board[new_loc[0]][new_loc[1]]
+    opponent_piece = node_remove_piece.chess_piece
+    return if opponent_piece.nil?
+
+    opponent = opponent_piece.player
+    opponent.chess_pieces.delete(opponent_piece.piece_id)
+    node_remove_piece.chess_piece = nil
   end
 
   def display_location
@@ -121,6 +153,7 @@ class ChessPiece
       break if check_in_range([row, col]) == false
 
       chesspiece_node = game_board.get_node([row, col]).chess_piece
+
       result.push([row, col]) if chesspiece_node.nil? || chesspiece_node.player.team != @player.team
       break unless chesspiece_node.nil?
     end

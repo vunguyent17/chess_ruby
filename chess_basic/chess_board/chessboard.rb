@@ -19,55 +19,37 @@ class ChessBoard
   attr_accessor :chess_board
 
   def initialize(*args)
-    # player_b, player_w, chess_piece
+    # player_b, player_w
     @chess_board = create_empty_board
-    if args.size == 2
-      add_chess_pieces(args[0], args[1])
-    else
-      unserialize(args[0], args[1], args[2])
-    end
-  end
-
-  def serialize_util
-    super do |obj, var|
-      obj[var] = @chess_board.map do |row|
-        row.filter do |node|
-          !node.chess_piece.nil?
-        end.map(&:serialize_util)
-      end
-      true
-    end
+    add_chess_pieces(*args)
   end
 
   def unserialize_update_player(player_b, player_w, chess_piece)
     return if chess_piece.name != 'King'
 
     if chess_piece.player.zero?
-      player_w.king = chess_piece
+      player_w.chess_pieces['King0'] = chess_piece
     else
-      player_b.king = chess_piece
+      player_b.chess_pieces['King0'] = chess_piece
     end
   end
 
-  def unserialize(player_b, player_w, obj)
-    data = obj['@chess_board']
-    data.each do |row|
+  def clear
+    @chess_board.each do |row|
       row.each do |node|
-        import_node_data(player_b, player_w, node)
+        node.chess_piece = nil
       end
     end
   end
 
-  def import_node_data(player_b, player_w, node)
-    loc = node['@current_loc']
-    piece_class = Object.const_get(node['@chess_piece']['@name'])
-    target_node = @chess_board[loc[0]][loc[1]]
-    target_node.chess_piece = piece_class.new(nil, loc)
-    target_piece = target_node.chess_piece
-    target_piece.unserialize(node['@chess_piece'])
-    unserialize_update_player(player_b, player_w, target_piece)
-    player_num = target_piece.player
-    target_piece.player = player_num.zero? ? player_w : player_b
+  def unserialize(player_b, player_w)
+    clear
+    data = player_b.chess_pieces.values + player_w.chess_pieces.values
+    data.each do |piece|
+      loc = piece.location
+      target_node = @chess_board[loc[0]][loc[1]]
+      target_node.chess_piece = piece
+    end
   end
 
   def create_empty_board
@@ -80,12 +62,6 @@ class ChessBoard
     matrix
   end
 
-  def add_chess_pieces_row(row, arr)
-    0.upto(7) do |y|
-      @chess_board[row][y].chess_piece = arr[y]
-    end
-  end
-
   def add_chess_pieces(player_b, player_w)
     add_chess_pieces_row(0, create_king_row(player_b, 0))
     add_chess_pieces_row(1, create_pawn_row(player_b, 1))
@@ -93,21 +69,28 @@ class ChessBoard
     add_chess_pieces_row(7, create_king_row(player_w, 7))
   end
 
-  def create_pawn_row(player, row)
-    result = []
+  def add_chess_pieces_row(row, arr)
     0.upto(7) do |y|
-      result.push(Pawn.new(player, [row, y]))
+      @chess_board[row][y].chess_piece = arr[y]
     end
-    result
+  end
+
+  def create_pawn_row(player, row)
+    pawn_row = []
+    0.upto(7) do |y|
+      pawn_row.push(player.chess_pieces["Pawn#{y}"])
+    end
+    pawn_row.each_with_index { |chess_piece, index| chess_piece.location = [row, index] }
+    pawn_row
   end
 
   def create_king_row(player, row)
-    king = King.new(player, [row, 4])
-    part_one = [Rook.new(player, [row, 0]), Knight.new(player, [row, 1]), Bishop.new(player, [row, 2])]
-    part_two = [Queen.new(player, [row, 3]), king]
-    part_three = [Bishop.new(player, [row, 5]), Knight.new(player, [row, 6]), Rook.new(player, [row, 7])]
-    player.king = king
-    part_one + part_two + part_three
+    king_row = %w[Rook0 Knight0 Bishop0 Queen0 King0 Bishop1 Knight1 Rook1]
+    king_row.map.with_index do |piece_id, index|
+      chess_piece = player.chess_pieces[piece_id]
+      chess_piece.location = [row, index]
+      chess_piece
+    end
   end
 
   def display_board
@@ -115,6 +98,7 @@ class ChessBoard
       print "#{V_AXIS[idx_row]} ".brown
       row.each_with_index do |node, idx_col|
         symbol = node.display_node
+        # symbol = node.chess_piece.nil? ? "" : node.chess_piece.location.to_s
         symbol = symbol.bold.bg_gray if (idx_row + idx_col).odd?
         print symbol
       end

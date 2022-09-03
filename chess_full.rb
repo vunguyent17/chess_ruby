@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative './chess_basic/chess_file_control'
+
+# Main Chess class
 class Chess < ChessFileControl
   def play
     puts 'WELCOME TO CHESS GAME'
